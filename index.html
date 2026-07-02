@@ -2491,8 +2491,10 @@ const FirestoreSync = {
       try {
         const ref = doc(this.db, map.col, map.id);
         if (item.value === null) {
+          /* TEMP-DEBUG */ if (map.col === 'candidates') console.log('%c[PYRAMID-DEBUG] DELETE candidates/'+map.id+'  (from key '+item.key+')', 'color:#dc2626;font-weight:bold', new Error().stack);
           await deleteDoc(ref);
         } else {
+          /* TEMP-DEBUG */ if (map.col === 'candidates') console.log('%c[PYRAMID-DEBUG] WRITE candidates/'+map.id+'  rows='+((item.value&&item.value.rows)?item.value.rows.length:'?')+'  (from key '+item.key+')', 'color:#2563eb;font-weight:bold');
           await setDoc(ref, { value: item.value, updatedAt: Date.now() });
         }
       } catch (err) {
@@ -2517,8 +2519,10 @@ const FirestoreSync = {
     this._applyingRemote = true;
     try {
       if (value === undefined || value === null) {
+        /* TEMP-DEBUG */ if (key.startsWith('pp_candidates_')) console.log('%c[PYRAMID-DEBUG] applyRemote WIPES local '+key, 'color:#ea580c;font-weight:bold', new Error().stack);
         localStorage.removeItem(key);
       } else {
+        /* TEMP-DEBUG */ if (key.startsWith('pp_candidates_')) console.log('%c[PYRAMID-DEBUG] applyRemote sets local '+key+'  rows='+((value&&value.rows)?value.rows.length:'?'), 'color:#16a34a');
         localStorage.setItem(key, JSON.stringify(value));
       }
     } finally {
@@ -2612,8 +2616,15 @@ const FirestoreSync = {
       try {
         const ref = doc(this.db, pb.col, id);
         this._listeners[path] = onSnapshot(ref, (snap) => {
-          if (!snap.exists()) { this._applyRemote(pb.lsKey, null); }
-          else {
+          /* TEMP-DEBUG */ if (pb.col === 'candidates') console.log('%c[PYRAMID-DEBUG] LISTENER candidates/'+id+' fired  exists='+snap.exists()+'  (lsKey '+pb.lsKey+')', 'color:#9333ea');
+          if (!snap.exists()) {
+            // Remote doc doesn't exist yet (fresh project). Do NOT wipe local
+            // data — instead seed Firestore from whatever is in the cache so
+            // the master copy gets created. Never delete good local data here.
+            const local = localStorage.getItem(pb.lsKey);
+            /* TEMP-DEBUG */ if (pb.col === 'candidates') console.log('%c[PYRAMID-DEBUG]   seed-branch: local['+pb.lsKey+'] = '+(local===null?'null (no-op)':'present -> will re-enqueue'), 'color:#9333ea');
+            if (local !== null) { try { this._enqueue(pb.lsKey, JSON.parse(local)); } catch(e){} }
+          } else {
             const data = snap.data();
             if (data && data.value !== undefined) this._applyRemote(pb.lsKey, data.value);
           }
